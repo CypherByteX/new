@@ -1,0 +1,176 @@
+// components/Layout.tsx
+import Navbar from './Navbar';
+import { ReactNode } from 'react';
+
+type LayoutProps = {
+  children: ReactNode;
+};
+
+const Layout = ({ children }: LayoutProps) => (
+  <div>
+    <Navbar />
+    <main>{children}</main>
+    <footer>© 2024 My Blog</footer>
+  </div>
+);
+
+export default Layout;
+
+
+
+
+// components/Navbar.tsx
+import Link from 'next/link';
+import { useTheme } from '../hooks/useTheme';
+
+const Navbar = () => {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <nav>
+      <ul>
+        <li><Link href="/">Home</Link></li>
+        <li><Link href="/blog">Blog</Link></li>
+        <button onClick={toggleTheme}>Toggle to {theme === 'dark' ? 'light' : 'dark'} mode</button>
+      </ul>
+    </nav>
+  );
+};
+
+// hooks/useTheme.ts
+import { createContext, useContext, useState, ReactNode } from 'react';
+
+type ThemeContextType = {
+  theme: string;
+  toggleTheme: () => void;
+};
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const ThemeProvider = ({ children }: { children: ReactNode }) => {
+  const [theme, setTheme] = useState('light');
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+};
+
+
+export default Navbar;
+
+
+// pages/index.tsx
+import { GetStaticProps } from 'next';
+import Layout from '../components/Layout';
+import { getPosts } from '../utils/api';
+
+type HomeProps = {
+  posts: { slug: string; title: string }[];
+};
+
+export const getStaticProps: GetStaticProps = async () => {
+  const posts = await getPosts();
+  return { props: { posts } };
+};
+
+const Home = ({ posts }: HomeProps) => (
+  <Layout>
+    <h1>Welcome to My Blog</h1>
+    <ul>
+      {posts.map(post => (
+        <li key={post.slug}>
+          <a href={`/blog/${post.slug}`}>{post.title}</a>
+        </li>
+      ))}
+    </ul>
+  </Layout>
+);
+
+export default Home;
+// pages/blog/[slug].tsx
+import { GetServerSideProps } from 'next';
+import Layout from '../../components/Layout';
+import { getPostContent } from '../../utils/api';
+import { markdownToHtml } from '../../utils/markdown';
+
+type PostProps = {
+  title: string;
+  content: string;
+};
+
+export const getServerSideProps: GetServerSideProps = async ({ params }) => {
+  const { slug } = params as { slug: string };
+  const post = await getPostContent(slug);
+  const content = await markdownToHtml(post.content);
+
+  return { props: { title: post.title, content } };
+};
+
+const BlogPost = ({ title, content }: PostProps) => (
+  <Layout>
+    <h1>{title}</h1>
+    <div dangerouslySetInnerHTML={{ __html: content }} />
+  </Layout>
+);
+
+export default BlogPost;
+// pages/api/posts.ts
+import { NextApiRequest, NextApiResponse } from 'next';
+
+const posts = [
+  { slug: 'my-first-post', title: 'My First Post', content: '# Hello World!' },
+  { slug: 'nextjs-rocks', title: 'Next.js Rocks', content: '# Next.js is awesome!' },
+];
+
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.status(200).json(posts);
+}
+// utils/markdown.ts
+import { remark } from 'remark';
+import html from 'remark-html';
+
+export async function markdownToHtml(markdown: string) {
+  const result = await remark().use(html).process(markdown);
+  return result.toString();
+}/* styles/global.css */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: white;
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+}
+
+nav li {
+  margin-right: 20px;
+}
+// pages/_app.tsx
+import { ThemeProvider } from '../hooks/useTheme';
+import '../styles/global.css';
+
+const MyApp = ({ Component, pageProps }: any) => (
+  <ThemeProvider>
+    <Component {...pageProps} />
+  </ThemeProvider>
+);
+
+export default MyApp;
+
